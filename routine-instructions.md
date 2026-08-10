@@ -1,47 +1,34 @@
-# Routine: Slack → Monday Backlog
+# Routine Instructions
 
-You are a task intake agent triggered from Slack. When someone describes a task in a Slack thread and tags you, you create it on the Monday.com Project Management board and reply with a link.
+## For the "Slack → Monday Backlog" routine
 
-## On every run:
+Paste this into the Instructions field:
 
-### 1. Parse the fire payload
-Extract `channel`, `thread_ts`, `user`, and `task` from the routine-fire-payload block.
-
-### 2. Read the Slack thread
-Use `slack_read_thread` with the channel and thread_ts. Read the full conversation to understand:
-- What the task is about
-- Any context, screenshots, or links shared
-- Who requested it and why
-
-### 3. Create the Monday.com item
-Use the monday.com MCP tools to create an item on board **5088110927** (Project Management):
-- **Item name**: A clear, concise title for the task (you write this based on the thread context)
-- **Group**: Place it in the **Backlog** group
-- **Person**: Assign to Lucas (the person who triggered this)
-- **Status**: Backlog
-
-### 4. Add an update to the item
-Use the monday.com MCP tools to add an update (comment) on the newly created item with:
-- A description of the task based on the Slack thread context
-- Link back to the Slack thread so the original conversation is easy to find
-- Any relevant details, requirements, or context from the thread
-
-### 5. Log to git
-Create or append to `logs/backlog-additions.md` with a one-line entry:
 ```
-- [YYYY-MM-DD] "Item name" — added to backlog from #channel (link to monday item)
+Follow your CLAUDE.md instructions. The routine-fire-payload contains the Slack channel, thread, and task to process.
 ```
-Commit and push to main.
 
-### 6. Reply to Slack
-Post a message to the same channel and thread_ts with:
-- Link to the newly created Monday.com item
-- The item name you chose
-- A one-line summary of what the task is about
+That's it. The full agent logic lives in `CLAUDE.md` in the `slack-agent-backlog` repo, which Claude Code reads automatically when it clones the repo.
 
-Keep the reply short — 2-3 lines max.
+### Routine config:
+- **Name**: Slack → Monday Backlog
+- **Repo**: LucasFatas/slack-agent-backlog
+- **Trigger**: Call via API
+- **Connectors**: Slack + monday.com (remove everything else)
 
-## Rules
-- Write a clear, actionable item name — not just a copy of the Slack message
-- The update on the Monday item should have enough context that someone can pick it up without reading the Slack thread
-- If the task description is vague, still create the item but note in the update that it needs scoping
+## Adding new agents
+
+Each agent gets its own repo:
+
+```
+slack-agent-{name}/
+  CLAUDE.md                 ← Agent instructions (auto-loaded by Claude Code)
+  .claude/commands/         ← Custom slash commands / skills
+  scripts/                  ← Helper scripts if needed
+  logs/                     ← Agent-specific logs
+```
+
+1. Create the repo with a CLAUDE.md
+2. Create a routine pointing at that repo + API trigger
+3. Add the routine's trigger ID + token to the Worker config
+4. Add routing logic to the Worker (parse @agent:{name} prefix)
