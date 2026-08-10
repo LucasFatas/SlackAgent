@@ -2,9 +2,40 @@ export interface Env {
 	THREADS: KVNamespace;
 	SLACK_SIGNING_SECRET: string;
 	SLACK_BOT_TOKEN: string;
-	ROUTINE_API_TOKEN: string;
-	ROUTINE_TRIGGER_ID: string;
+	AGENTS: string; // JSON: { "prefix": { "trigger_id": "...", "token": "..." }, ... }
 	ALLOWED_USERS: string; // comma-separated Slack user IDs
+}
+
+// ─── Agent routing ───────────────────────────────────────────────────────────
+
+interface AgentConfig {
+	trigger_id: string;
+	token: string;
+}
+
+interface AgentsMap {
+	[prefix: string]: AgentConfig;
+}
+
+function resolveAgent(
+	text: string,
+	agents: AgentsMap,
+): { agent: AgentConfig; taskText: string } | null {
+	// Try to match "prefix: rest of message" or "prefix rest of message"
+	const match = text.match(/^(\w+)[:\s]\s*(.*)/s);
+	if (match) {
+		const prefix = match[1].toLowerCase();
+		if (agents[prefix]) {
+			return { agent: agents[prefix], taskText: match[2].trim() };
+		}
+	}
+
+	// No prefix matched — use default agent (keyed as "_default")
+	if (agents["_default"]) {
+		return { agent: agents["_default"], taskText: text.trim() };
+	}
+
+	return null;
 }
 
 // ─── Slack signature verification ────────────────────────────────────────────
@@ -135,19 +166,43 @@ async function handleEvent(event: SlackEvent, env: Env, ctx: ExecutionContext) {
 	const isThreadReply = event.type === "message" && event.thread_ts;
 
 	// For thread replies, only respond if this thread is tracked
+	let trackedAgent: string | null = null;
 	if (isThreadReply && !isAppMention) {
-		const tracked = await env.THREADS.get(`thread:${channel}:${threadTs}`);
-		if (!tracked) return;
+		trackedAgent = await env.THREADS.get(`thread:${channel}:${threadTs}`);
+		if (!trackedAgent) return;
 	}
 
-	// For app_mention or tracked thread reply → fire the routine
-	const taskText = (event.text ?? "").replace(/<@[A-Z0-9]+>/g, "").trim();
-	if (!taskText) return;
+	// Strip bot mention, get clean text
+	const cleanText = (event.text ?? "").replace(/<@[A-Z0-9]+>/g, "").trim();
+	if (!cleanText) return;
 
-	// Track this thread
-	await env.THREADS.put(`thread:${channel}:${threadTs}`, "active", {
-		expirationTtl: 7 * 24 * 60 * 60, // 7 days
-	});
+	// Parse agents config
+	const agents: AgentsMap = JSON.parse(env.AGENTS);
+
+	// Resolve which agent to use
+	let agent: AgentConfig;
+	let taskText: string;
+
+	if (trackedAgent && trackedAgent !== "active") {
+		// Follow-up in a tracked thread — use the same agent as the original
+		const parsed = JSON.parse(trackedAgent) as { prefix: string };
+		agent = agents[parsed.prefix] ?? agents["_default"];
+		taskText = cleanText;
+	} else {
+		// New mention — route by prefix
+		const resolved = resolveAgent(cleanText, agents);
+		if (!resolved) return;
+		agent = resolved.agent;
+		taskText = resolved.taskText;
+
+		// Find which prefix matched for thread tracking
+		const matchedPrefix = Object.keys(agents).find((k) => agents[k] === agent) ?? "_default";
+		await env.THREADS.put(
+			`thread:${channel}:${threadTs}`,
+			JSON.stringify({ prefix: matchedPrefix }),
+			{ expirationTtl: 7 * 24 * 60 * 60 },
+		);
+	}
 
 	// React with eyes to acknowledge
 	ctx.waitUntil(addReaction(env.SLACK_BOT_TOKEN, channel, messageTs, "eyes"));
@@ -161,7 +216,7 @@ async function handleEvent(event: SlackEvent, env: Env, ctx: ExecutionContext) {
 	].join("\n");
 
 	try {
-		await fireRoutine(env.ROUTINE_TRIGGER_ID, env.ROUTINE_API_TOKEN, fireText);
+		await fireRoutine(agent.trigger_id, agent.token, fireText);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";
 		ctx.waitUntil(
