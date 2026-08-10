@@ -161,17 +161,7 @@ async function handleEvent(event: SlackEvent, env: Env, ctx: ExecutionContext) {
 	].join("\n");
 
 	try {
-		const result = await fireRoutine(env.ROUTINE_TRIGGER_ID, env.ROUTINE_API_TOKEN, fireText);
-
-		// Post session link to thread
-		ctx.waitUntil(
-			postToThread(
-				env.SLACK_BOT_TOKEN,
-				channel,
-				threadTs,
-				`Working on it → ${result.claude_code_session_url}`,
-			),
-		);
+		await fireRoutine(env.ROUTINE_TRIGGER_ID, env.ROUTINE_API_TOKEN, fireText);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";
 		ctx.waitUntil(
