@@ -1,0 +1,21 @@
+{
+  "name": "slack-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+
+  "account_id": "bd75af2997a86ff7ec79253a690af96a",
+
+  // KV namespace for tracking active threads
+  "kv_namespaces": [
+    {
+      "binding": "THREADS",
+      "id": "8349d322a8bd46e8b8a115bc957d4c85"
+    }
+  ]
+
+  // Secrets (set via `wrangler secret put`):
+  //   SLACK_SIGNING_SECRET  - from Slack app settings
+  //   ROUTINE_API_TOKEN     - from routine's API trigger
+  //   ROUTINE_TRIGGER_ID    - the routine's trigger ID (trig_...)
+  //   ALLOWED_USERS         - comma-separated Slack user IDs
+}
