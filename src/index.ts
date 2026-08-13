@@ -165,12 +165,15 @@ async function handleEvent(event: SlackEvent, env: Env, ctx: ExecutionContext) {
 	const isAppMention = event.type === "app_mention";
 	const isThreadReply = event.type === "message" && event.thread_ts;
 
-	// For thread replies, only respond if this thread is tracked
+	// For thread replies without @mention, only respond if this thread is tracked
 	let trackedAgent: string | null = null;
 	if (isThreadReply && !isAppMention) {
 		trackedAgent = await env.THREADS.get(`thread:${channel}:${threadTs}`);
 		if (!trackedAgent) return;
 	}
+
+	// For non-threaded messages, require @mention — don't react to every message in the channel
+	if (!isAppMention && !isThreadReply) return;
 
 	// Strip bot mention, get clean text
 	const cleanText = (event.text ?? "").replace(/<@[A-Z0-9]+>/g, "").trim();
