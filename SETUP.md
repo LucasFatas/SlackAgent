@@ -23,6 +23,8 @@ Then set the secrets:
 cd ~/Desktop/SlackAgent
 echo "YOUR_SIGNING_SECRET" | npx wrangler secret put SLACK_SIGNING_SECRET
 echo "xoxb-YOUR-BOT-TOKEN" | npx wrangler secret put SLACK_BOT_TOKEN
+# Bot's own user ID (find it in the app's OAuth page or call auth.test)
+echo "U08XXXXBOT" | npx wrangler secret put SLACK_BOT_USER_ID
 ```
 
 ### Step 2: Create the Claude Routine

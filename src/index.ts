@@ -2,6 +2,7 @@ export interface Env {
 	THREADS: KVNamespace;
 	SLACK_SIGNING_SECRET: string;
 	SLACK_BOT_TOKEN: string;
+	SLACK_BOT_USER_ID: string; // bot's own Slack user ID — used to ignore self-messages
 	AGENTS: string; // JSON: { "prefix": { "trigger_id": "...", "token": "..." }, ... }
 	ALLOWED_USERS: string; // comma-separated Slack user IDs
 }
@@ -148,8 +149,15 @@ interface SlackEvent {
 }
 
 async function handleEvent(event: SlackEvent, env: Env, ctx: ExecutionContext) {
-	// Ignore bot messages
+	// Ignore bot messages — three layers:
+	// 1. Standard Slack bot fields
 	if (event.bot_id || event.subtype === "bot_message") return;
+	// 2. Our own bot user (belt-and-suspenders for Worker-posted messages)
+	if (event.user === env.SLACK_BOT_USER_ID) return;
+	// 3. Claude connector messages — the routine's Slack connector posts as the
+	//    triggering *user*, so bot_id/subtype aren't set and event.user is human.
+	//    These always end with a "Sent using <@BOT>" attribution line.
+	if (/\*Sent using\*\s*<@\w+[^>]*>\s*$/.test(event.text ?? "")) return;
 
 	// Check allowed users
 	const allowedUsers = new Set(env.ALLOWED_USERS.split(",").map((u) => u.trim()));
